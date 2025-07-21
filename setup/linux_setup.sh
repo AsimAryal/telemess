@@ -1,6 +1,6 @@
 #!/bin/bash
 # author: asim@iovox.com
-# version: 2025.02.07
+# version: 2025.07.21
 # description:
 #   This script provides a robust, one-step setup for a Python project.
 #   It is safe to run on a brand new project or on an existing project
@@ -12,30 +12,33 @@
 #   3. Ensures a 'pyproject.toml' file and the corresponding package directory exist, creating defaults if needed.
 #   4. Ensures standard configurations for 'ruff' and 'pre-commit' are present.
 #   5. Syncs the virtual environment by resolving all dependencies from 'pyproject.toml'.
-#   6. Installs Git hooks.
+#   6. Installs Git hooks using pre-commit.
 #
 
 set -e
 
 echo "Starting Python project setup for Linux/macOS"
 
-# Configuration
+#Configuration
 # Set the desired Python version for the virtual environment.
 PYTHON_VERSION="3.11"
-PROJECT_NAME="src" # Use 'src' for the package directory name
+# Set the name of your package. This will be used for the directory inside 'src'.
+PACKAGE_NAME="new_project"
+
 
 # Install Core Tools
-echo "Installing uv and ruff"
+echo "Ensuring uv and ruff are installed..."
 curl -LsSf https://astral.sh/uv/install.sh | sh
 curl -LsSf https://astral.sh/ruff/install.sh | sh
 
-# Update PATH for the Current Session
-export PATH="$HOME/.cargo/bin:$PATH"
+# Update PATH for the Current Session to ensure uv and ruff are found
+export PATH="$HOME/.local/bin:$PATH"
 echo "PATH updated for this session."
 
 # Create Virtual Environment if it doesn't exist
 if [ ! -d ".venv" ]; then
     echo "Creating virtual environment (.venv) with Python $PYTHON_VERSION"
+    # The > /dev/null redirects the success message to keep the output clean
     uv venv -p "$PYTHON_VERSION" > /dev/null
 fi
 
@@ -43,30 +46,27 @@ fi
 if [ ! -f "pyproject.toml" ]; then
     echo "No pyproject.toml found. Creating a default project file and structure."
 
-    # Create the package directory that hatchling needs
-    mkdir -p "$PROJECT_NAME"
+    # Create the standard 'src' layout directory for the package
+    mkdir -p "src/$PACKAGE_NAME"
     # Create the __init__.py to make it a package
-    touch "$PROJECT_NAME/__init__.py"
+    touch "src/$PACKAGE_NAME/__init__.py"
 
+    # Create a pyproject.toml: uses `uv build`
     cat <<EOF > pyproject.toml
 [project]
-name = "new_project"
+name = "$PACKAGE_NAME"
 version = "0.1.0"
-description = "new_project_description"
+description = "A new project managed entirely by uv."
 authors = [{ name = "Your Name", email = "your@email.com" }]
 dependencies = [
     "pre-commit>=3.0.0",
 ]
-requires-python = ">=3.11"
+requires-python = ">=$PYTHON_VERSION"
 readme = "README.md"
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+# No [build-system] is needed. 'uv build' will use a default,
+# making this a pure 'uv' managed project.
 
-# Explicitly tell hatch where to find the code to prevent build errors
-[tool.hatch.build.targets.wheel]
-packages = ["$PROJECT_NAME"]
 EOF
 else
     echo "Existing pyproject.toml found."
@@ -87,7 +87,7 @@ exclude = [
 ]
 line-length = 88
 indent-width = 4
-target-version = "py311"
+target-version = "py$PYTHON_VERSION"
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "I"]
 EOF
@@ -120,12 +120,12 @@ EOF
 fi
 
 # Sync Environment: This is the key step for new and existing projects.
-# It reads 'pyproject.toml', resolves all dependencies (including sub-dependencies),
-# creates/updates uv.lock, and installs everything into the virtual environment.
+# It reads 'pyproject.toml', updates 'uv.lock' if needed,
+# and installs all dependencies into the virtual environment.
 echo "Syncing environment to install all dependencies..."
-uv pip sync pyproject.toml > /dev/null
+uv sync > /dev/null
 
-# Ensure we are in a Git repository
+# Ensure we are in a Git repository before installing hooks
 if ! git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
     echo "Not a Git repository. Initializing Git..."
     git init
@@ -133,13 +133,14 @@ if ! git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
     git commit -m "Initial commit from setup script" || echo "Initial commit skipped (possibly nothing to commit)."
 fi
 
-# Install Git Hooks
-echo "Installing git hooks"
+# Install Git Hooks using uv run to execute in the venv
+echo "Installing git hooks..."
 uv run pre-commit install --install-hooks
 uv run pre-commit install --hook-type pre-push
 
 # Final Instructions
+echo ""
 echo "Setup complete. Your environment is ready."
 echo "To activate the virtual environment, run the following command in your terminal:"
 echo "source .venv/bin/activate"
-echo "Once activated, add new packages using 'uv add <package-name>'"
+echo "Once activated, you can add packages with 'uv add <package_name>'"

@@ -8,7 +8,8 @@ This template provides a standardized Python project setup to ensure consistency
 
 After cloning this repository, run the appropriate setup script for your operating system.<br>
 These scripts are intended to be run only once.<br>
-Set python version you want in the setup script, default is 3.11
+<b>Set python version you want in the setup script<b> default is 3.11<br>
+<b>Set the project name in the setup script<b>
 
 ### Linux/macOS
 
@@ -80,8 +81,13 @@ uv add <package-name>
 If joining an existing project or switching machines, run:
 
 ```bash
-uv pip sync
+uv sync
 ```
+
+It automatically looks for a pyproject.toml and a corresponding uv.lock file in your current directory.<br>
+It intelligently checks if your uv.lock is out of date with pyproject.toml.<br>
+If it is, it first resolves the dependencies and updates uv.lock.<br>
+Then, it installs the exact versions from the uv.lock file<br>
 
 ### Running Lint Checks Manually
 
