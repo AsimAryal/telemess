@@ -29,8 +29,8 @@ $packageName = "new_project"
 # Install Core Tools
 Write-Host "Installing uv and ruff"
 try {
-    irm https://astral.sh/uv/install.ps1 | iex
-    irm https://astral.sh/ruff/install.ps1 | iex
+    Invoke-RestMethod https://astral.sh/uv/install.ps1 | Invoke-Expression
+    Invoke-RestMethod https://astral.sh/ruff/install.ps1 | Invoke-Expression
 } catch {
     Write-Host "Error installing core tools. Please check your internet connection and try again."
     exit 1
