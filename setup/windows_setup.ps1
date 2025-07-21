@@ -93,7 +93,7 @@ exclude = [
 ]
 line-length = 88
 indent-width = 4
-target-version = "py$pythonVersion"
+target-version = "py$($pythonVersion -replace '\.', '')"
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "I"]
 "@

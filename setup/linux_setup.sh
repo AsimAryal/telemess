@@ -86,7 +86,7 @@ exclude = [
 ]
 line-length = 88
 indent-width = 4
-target-version = "py$PYTHON_VERSION"
+target-version = "py${PYTHON_VERSION//./}"
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "I"]
 EOF
