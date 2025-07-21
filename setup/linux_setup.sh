@@ -56,7 +56,7 @@ if [ ! -f "pyproject.toml" ]; then
 [project]
 name = "$PACKAGE_NAME"
 version = "0.1.0"
-description = "A new project managed entirely by uv."
+description = "A new project."
 authors = [{ name = "Your Name", email = "your@email.com" }]
 dependencies = [
     "pre-commit>=3.0.0",
