@@ -64,8 +64,7 @@ dependencies = [
 requires-python = ">=$PYTHON_VERSION"
 readme = "README.md"
 
-# No [build-system] is needed. 'uv build' will use a default,
-# making this a pure 'uv' managed project.
+# 'uv' managed build as default.
 
 EOF
 else

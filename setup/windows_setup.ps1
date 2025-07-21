@@ -73,7 +73,6 @@ dependencies = [
 requires-python = ">=$pythonVersion"
 readme = "README.md"
 
-
 # 'uv' managed build as default.
 
 "@ | Out-File -Encoding UTF8 "pyproject.toml"
