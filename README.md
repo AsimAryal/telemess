@@ -24,9 +24,12 @@ powershell<br>
 Run this first:<br>
 `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser`
 
+<b>If you run into an error, run the following command outside vscode in powershell(run as administrator):<b><br>
+
+`Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope LocalMachine`
+
 Then run this to setup your environment:<br>
 `.\setup\setup_windows.ps1`
-
 
 
 -----
