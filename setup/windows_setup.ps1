@@ -62,6 +62,10 @@ if (-not (Test-Path "pyproject.toml" -PathType Leaf)) {
 
     # Create a pyproject.toml: uses `uv build`
 @"
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "$packageName"
 version = "0.1.0"
@@ -73,7 +77,6 @@ dependencies = [
 requires-python = ">=$pythonVersion"
 readme = "README.md"
 
-# 'uv' managed build as default.
 
 "@ | Out-File -Encoding UTF8 "pyproject.toml"
 } else {

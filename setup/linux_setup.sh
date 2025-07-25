@@ -19,7 +19,7 @@ set -e
 
 echo "Starting Python project setup for Linux/macOS"
 
-#Configuration
+# Configuration
 # Set the desired Python version for the virtual environment.
 PYTHON_VERSION="3.11"
 # Set the name of your package. This will be used for the directory inside 'src'.
@@ -53,6 +53,11 @@ if [ ! -f "pyproject.toml" ]; then
 
     # Create a pyproject.toml: uses `uv build`
     cat <<EOF > pyproject.toml
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "$PACKAGE_NAME"
 version = "0.1.0"
@@ -63,8 +68,6 @@ dependencies = [
 ]
 requires-python = ">=$PYTHON_VERSION"
 readme = "README.md"
-
-# 'uv' managed build as default.
 
 EOF
 else
