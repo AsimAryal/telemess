@@ -1024,6 +1024,7 @@ function initEventListeners() {
 
     // Reveal
     document.getElementById('btn-reveal-next').addEventListener('click', handleRevealNext);
+    document.getElementById('btn-reveal-main-menu').addEventListener('click', handleBackToLobby);
 
     // Finished
     document.getElementById('btn-play-again').addEventListener('click', handlePlayAgain);

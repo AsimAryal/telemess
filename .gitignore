@@ -171,3 +171,6 @@ data/
 # Telemess database
 telemess.db
 telemess.db-journal
+
+# Telemess logs
+logs/

@@ -7,7 +7,10 @@ import uuid
 from typing import Any
 
 from . import database as db
+from .logging_config import get_logger
 from .prompts import get_random_prompts
+
+logger = get_logger("game")
 
 
 class GameManager:
@@ -31,6 +34,7 @@ class GameManager:
         await db.init_db()
         self._cleanup_task = asyncio.create_task(self._cleanup_loop())
         self._initialized = True
+        logger.info("GameManager initialized")
 
     async def _ensure_initialized(self):
         """Ensure the database is initialized before operations."""
@@ -39,6 +43,7 @@ class GameManager:
 
     async def _cleanup_loop(self):
         """Periodically clean up stale rooms and players."""
+        logger.debug("Cleanup loop started")
         while True:
             await asyncio.sleep(30)  # Check every 30 seconds
             try:
@@ -46,14 +51,15 @@ class GameManager:
                     self.DISCONNECT_TIMEOUT, self.ROOM_CLEANUP_TIMEOUT
                 )
                 if players_removed or rooms_removed:
-                    print(
-                        f"Cleanup: removed {players_removed} players, {rooms_removed} rooms"
+                    logger.info(
+                        f"Cleanup: removed {players_removed} stale players, "
+                        f"{rooms_removed} empty rooms"
                     )
-            except Exception as e:
-                print(f"Cleanup error: {e}")
+            except Exception:
+                logger.exception("Error in cleanup loop")
 
     async def create_room(
-        self, host_name: str, room_name: str = ""
+        self, host_name: str, room_name: str = "", ip: str = ""
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         """Create a new game room with the given host."""
         room_id = str(uuid.uuid4())[:8].upper()
@@ -74,6 +80,11 @@ class GameManager:
 
         host = await db.create_player(
             player_id=player_id, room_id=room_id, name=host_name, is_host=True
+        )
+
+        logger.info(
+            f"ROOM CREATED | room={room_id} name='{room['name']}' "
+            f"host={host_name} ip={ip}"
         )
 
         return room, host
@@ -99,28 +110,51 @@ class GameManager:
         return await db.get_available_rooms()
 
     async def join_room(
-        self, room_id: str, player_name: str, player_id: str | None = None
+        self,
+        room_id: str,
+        player_name: str,
+        player_id: str | None = None,
+        ip: str = "",
     ) -> tuple[dict[str, Any], dict[str, Any]] | None:
         """Join an existing room. Returns None if room doesn't exist or is full."""
         room = await db.get_room(room_id)
         if not room:
+            logger.warning(f"JOIN FAILED | room={room_id} reason=not_found ip={ip}")
             return None
 
         player_count = await db.count_room_players(room_id)
         if player_count >= 16:
+            logger.warning(
+                f"JOIN FAILED | room={room_id} reason=room_full "
+                f"player={player_name} ip={ip}"
+            )
             return None
 
-        # Check if this is a reconnecting player
+        # Check if this is a reconnecting player or switching rooms
         if player_id:
             existing_player = await db.get_player(player_id)
-            if existing_player and existing_player["room_id"] == room_id.upper():
-                await db.update_player(
-                    player_id, is_connected=True, last_seen=time.time()
-                )
-                room = await self.get_room(room_id)
-                return room, existing_player
+            if existing_player:
+                if existing_player["room_id"] == room_id.upper():
+                    # Reconnecting to same room
+                    await db.update_player(
+                        player_id, is_connected=True, last_seen=time.time()
+                    )
+                    room = await self.get_room(room_id)
+                    logger.info(
+                        f"PLAYER RECONNECTED | room={room_id} player={player_name} "
+                        f"id={player_id[:8]}... ip={ip}"
+                    )
+                    return room, existing_player
+                else:
+                    # Player exists in a different room - remove them from old room
+                    old_room_id = existing_player["room_id"]
+                    await db.delete_player(player_id)
+                    logger.info(
+                        f"PLAYER SWITCHED ROOMS | from={old_room_id} to={room_id} "
+                        f"player={player_name} id={player_id[:8]}... ip={ip}"
+                    )
 
-        # New player
+        # New player (or player who just switched rooms)
         new_player_id = player_id or str(uuid.uuid4())
         player = await db.create_player(
             player_id=new_player_id,
@@ -130,6 +164,15 @@ class GameManager:
         )
 
         room = await self.get_room(room_id)
+        connected_count = len(
+            [p for p in room["players"].values() if p["is_connected"]]
+        )
+
+        logger.info(
+            f"PLAYER JOINED | room={room_id} player={player_name} "
+            f"id={new_player_id[:8]}... players={connected_count}/16 ip={ip}"
+        )
+
         return room, player
 
     async def leave_room(self, room_id: str, player_id: str) -> bool:
@@ -143,44 +186,78 @@ class GameManager:
             return True
 
         was_host = player["is_host"]
+        player_name = player["name"]
 
         # In lobby, remove immediately. In game, mark as disconnected
         if room["phase"] == "lobby":
             await db.delete_player(player_id)
+            logger.info(
+                f"PLAYER LEFT | room={room_id} player={player_name} "
+                f"id={player_id[:8]}... phase=lobby"
+            )
         else:
             await db.update_player(player_id, is_connected=False, last_seen=time.time())
+            logger.info(
+                f"PLAYER LEFT | room={room_id} player={player_name} "
+                f"id={player_id[:8]}... phase={room['phase']} (marked disconnected)"
+            )
 
         # Handle host migration
         if was_host:
-            await db.ensure_room_has_host(room_id)
+            new_host_id = await db.ensure_room_has_host(room_id)
+            if new_host_id:
+                new_host = await db.get_player(new_host_id)
+                if new_host:
+                    logger.info(
+                        f"HOST MIGRATED | room={room_id} "
+                        f"new_host={new_host['name']} id={new_host_id[:8]}..."
+                    )
 
         # Delete empty rooms in lobby
         player_count = await db.count_room_players(room_id)
         if player_count == 0 and room["phase"] == "lobby":
             await db.delete_room(room_id)
+            logger.info(f"ROOM DELETED | room={room_id} reason=empty")
             return False
 
         return True
 
-    async def update_settings(self, room_id: str, settings: dict[str, Any]) -> bool:
+    async def update_settings(
+        self, room_id: str, settings: dict[str, Any], player_name: str = ""
+    ) -> bool:
         """Update room settings. Only host can do this."""
         room = await db.get_room(room_id)
         if not room:
             return False
 
         current_settings = room["settings"]
+        changes = []
 
         if "draw_time" in settings:
-            current_settings["draw_time"] = max(
-                15, min(180, int(settings["draw_time"]))
-            )
+            new_val = max(15, min(180, int(settings["draw_time"])))
+            if new_val != current_settings["draw_time"]:
+                current_settings["draw_time"] = new_val
+                changes.append(f"draw_time={new_val}s")
+
         if "describe_time" in settings:
-            current_settings["describe_time"] = max(
-                10, min(120, int(settings["describe_time"]))
-            )
+            new_val = max(10, min(120, int(settings["describe_time"])))
+            if new_val != current_settings["describe_time"]:
+                current_settings["describe_time"] = new_val
+                changes.append(f"describe_time={new_val}s")
+
         if "custom_prompt" in settings:
             max_len = current_settings.get("max_prompt_length", 50)
-            current_settings["custom_prompt"] = str(settings["custom_prompt"])[:max_len]
+            new_val = str(settings["custom_prompt"])[:max_len]
+            if new_val != current_settings.get("custom_prompt", ""):
+                current_settings["custom_prompt"] = new_val
+                if new_val:
+                    changes.append(f"custom_prompt='{new_val}'")
+
+        if changes:
+            logger.debug(
+                f"SETTINGS UPDATED | room={room_id} by={player_name} "
+                f"changes=[{', '.join(changes)}]"
+            )
 
         return await db.update_room(room_id, settings=current_settings)
 
@@ -197,15 +274,19 @@ class GameManager:
             return False, "Game already in progress"
         return True, ""
 
-    async def start_game(self, room_id: str) -> bool:
+    async def start_game(self, room_id: str, host_name: str = "") -> bool:
         """Start the game, creating chains for all players."""
-        can_start, _ = await self.can_start_game(room_id)
+        can_start, reason = await self.can_start_game(room_id)
         if not can_start:
+            logger.warning(
+                f"GAME START FAILED | room={room_id} reason={reason} host={host_name}"
+            )
             return False
 
         room = await db.get_room(room_id)
         connected = await db.get_connected_players(room_id)
         player_ids = [p["id"] for p in connected]
+        player_names = [p["name"] for p in connected]
         random.shuffle(player_ids)
 
         # Calculate number of chains (aim for 4-6 players per chain)
@@ -224,6 +305,7 @@ class GameManager:
         idx = 0
         prompts = get_random_prompts(num_chains)
         settings = room["settings"]
+        chain_prompts = []
 
         for i in range(num_chains):
             chain_id = str(uuid.uuid4())
@@ -240,6 +322,8 @@ class GameManager:
                 initial_prompt = settings["custom_prompt"]
             else:
                 initial_prompt = prompts[i] if i < len(prompts) else prompts[0]
+
+            chain_prompts.append(initial_prompt)
 
             host = await db.get_room_host(room_id)
             await db.create_turn(
@@ -259,6 +343,12 @@ class GameManager:
 
         # Update room phase
         await db.update_room(room_id, phase="playing", current_turn_start=time.time())
+
+        logger.info(
+            f"GAME STARTED | room={room_id} players={num_players} "
+            f"chains={num_chains} prompts={chain_prompts} "
+            f"participants=[{', '.join(player_names)}]"
+        )
 
         return True
 
@@ -397,7 +487,7 @@ class GameManager:
             turn_type=turn_type,
             player_id=player_id,
             player_name=player["name"],
-            content=content,
+            content=content if turn_type == "description" else "(drawing)",
             position=turn_count,
         )
 
@@ -406,7 +496,9 @@ class GameManager:
 
         # Move to next player or complete chain
         new_index = chain["current_player_index"] + 1
-        if new_index >= len(chain["player_order"]):
+        is_chain_complete = new_index >= len(chain["player_order"])
+
+        if is_chain_complete:
             await db.update_chain(chain_id, is_complete=True)
         else:
             await db.update_chain(chain_id, current_player_index=new_index)
@@ -419,8 +511,17 @@ class GameManager:
 
         # Check if all chains are complete
         chains = await db.get_room_chains(room_id)
-        if all(c["is_complete"] for c in chains):
+        all_complete = all(c["is_complete"] for c in chains)
+        if all_complete:
             await db.update_room(room_id, phase="reveal")
+
+        # Log the turn
+        content_preview = content[:30] if turn_type == "description" else "(drawing)"
+        logger.info(
+            f"TURN SUBMITTED | room={room_id} player={player['name']} "
+            f"type={turn_type} content='{content_preview}' "
+            f"chain_complete={is_chain_complete} all_complete={all_complete}"
+        )
 
         return True, "Turn submitted"
 
@@ -436,6 +537,7 @@ class GameManager:
 
         player_id = chain["player_order"][current_idx]
         player = await db.get_player(player_id)
+        player_name = player["name"] if player else "Unknown"
 
         # Determine turn type
         last_turn = await db.get_last_turn(chain_id)
@@ -455,7 +557,7 @@ class GameManager:
             chain_id=chain_id,
             turn_type=turn_type,
             player_id=player_id,
-            player_name=player["name"] if player else "Unknown",
+            player_name=player_name,
             content="(timed out)" if turn_type == "description" else "",
             position=turn_count,
         )
@@ -475,8 +577,13 @@ class GameManager:
 
         # Check if all chains complete
         chains = await db.get_room_chains(room_id)
-        if all(c["is_complete"] for c in chains):
+        all_complete = all(c["is_complete"] for c in chains)
+        if all_complete:
             await db.update_room(room_id, phase="reveal")
+
+        logger.warning(
+            f"TURN TIMEOUT | room={room_id} player={player_name} type={turn_type}"
+        )
 
         return True
 
@@ -494,7 +601,7 @@ class GameManager:
             "total_chains": len(chains),
         }
 
-    async def advance_reveal(self, room_id: str) -> bool:
+    async def advance_reveal(self, room_id: str, host_name: str = "") -> bool:
         """Advance to the next chain in the reveal."""
         room = await db.get_room(room_id)
         if not room or room["phase"] != "reveal":
@@ -505,12 +612,16 @@ class GameManager:
 
         if new_index >= len(chains):
             await db.update_room(room_id, phase="finished")
+            logger.info(f"GAME FINISHED | room={room_id}")
             return False
 
         await db.update_room(room_id, reveal_chain_index=new_index)
+        logger.debug(
+            f"REVEAL ADVANCED | room={room_id} chain={new_index + 1}/{len(chains)}"
+        )
         return True
 
-    async def restart_game(self, room_id: str) -> bool:
+    async def restart_game(self, room_id: str, host_name: str = "") -> bool:
         """Reset the room for a new game."""
         # Delete all chains (cascades to turns)
         await db.delete_room_chains(room_id)
@@ -532,11 +643,19 @@ class GameManager:
         for player_id in players:
             await db.update_player(player_id, current_chain_id=None)
 
+        logger.info(f"GAME RESTARTED | room={room_id} host={host_name}")
+
         return True
 
     async def disconnect_player(self, room_id: str, player_id: str):
         """Mark a player as disconnected (for reconnection support)."""
-        await db.update_player(player_id, is_connected=False, last_seen=time.time())
+        player = await db.get_player(player_id)
+        if player:
+            await db.update_player(player_id, is_connected=False, last_seen=time.time())
+            logger.debug(
+                f"PLAYER DISCONNECTED | room={room_id} player={player['name']} "
+                f"id={player_id[:8]}..."
+            )
 
     async def reconnect_player(self, room_id: str, player_id: str) -> bool:
         """Attempt to reconnect a player."""
@@ -545,6 +664,10 @@ class GameManager:
             return False
 
         await db.update_player(player_id, is_connected=True, last_seen=time.time())
+        logger.debug(
+            f"PLAYER RECONNECTED (WS) | room={room_id} player={player['name']} "
+            f"id={player_id[:8]}..."
+        )
         return True
 
 

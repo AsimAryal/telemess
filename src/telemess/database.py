@@ -7,6 +7,10 @@ from typing import Any
 
 import aiosqlite
 
+from .logging_config import get_logger
+
+logger = get_logger("database")
+
 # Database file location (in the project root)
 DB_PATH = Path(__file__).resolve().parent.parent.parent / "telemess.db"
 
@@ -16,6 +20,7 @@ SCHEMA_VERSION = 1
 
 async def init_db():
     """Initialize the database with required tables."""
+    logger.info(f"Initializing database at {DB_PATH}")
     async with aiosqlite.connect(DB_PATH) as db:
         # Enable foreign keys
         await db.execute("PRAGMA foreign_keys = ON")
@@ -99,6 +104,7 @@ async def init_db():
         )
 
         await db.commit()
+        logger.info(f"Database initialized (schema v{SCHEMA_VERSION})")
 
 
 async def get_db() -> aiosqlite.Connection:

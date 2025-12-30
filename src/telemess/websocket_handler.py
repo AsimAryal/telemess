@@ -7,6 +7,25 @@ from typing import Any
 from fastapi import WebSocket
 
 from .game_manager import game_manager
+from .logging_config import get_logger
+
+logger = get_logger("websocket")
+
+
+def get_ws_client_ip(websocket: WebSocket) -> str:
+    """Extract client IP from WebSocket connection."""
+    # Check for forwarded headers
+    headers = dict(websocket.headers)
+    forwarded = headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    real_ip = headers.get("x-real-ip")
+    if real_ip:
+        return real_ip
+    # Direct connection
+    if websocket.client:
+        return websocket.client.host
+    return "unknown"
 
 
 class ConnectionManager:
@@ -23,6 +42,7 @@ class ConnectionManager:
     async def connect(self, websocket: WebSocket, room_id: str, player_id: str):
         """Register a new connection."""
         await websocket.accept()
+        ip = get_ws_client_ip(websocket)
 
         if room_id not in self.connections:
             self.connections[room_id] = {}
@@ -31,6 +51,9 @@ class ConnectionManager:
         if player_id in self.connections[room_id]:
             try:
                 await self.connections[room_id][player_id].close()
+                logger.debug(
+                    f"WS REPLACED | room={room_id} player_id={player_id[:8]}... ip={ip}"
+                )
             except Exception:
                 pass
 
@@ -39,6 +62,20 @@ class ConnectionManager:
 
         # Reconnect player in game manager
         await game_manager.reconnect_player(room_id, player_id)
+
+        # Log the connection
+        player = None
+        room = await game_manager.get_room(room_id)
+        if room:
+            player = room.get("players", {}).get(player_id)
+
+        player_name = player["name"] if player else "unknown"
+        connection_count = len(self.connections.get(room_id, {}))
+
+        logger.info(
+            f"WS CONNECTED | room={room_id} player={player_name} "
+            f"id={player_id[:8]}... connections={connection_count} ip={ip}"
+        )
 
     def disconnect(self, room_id: str, player_id: str):
         """Remove a connection."""
@@ -89,10 +126,22 @@ class ConnectionManager:
         """Handle incoming WebSocket messages."""
         msg_type = data.get("type", "")
         room = await game_manager.get_room(room_id)
+        player = room.get("players", {}).get(player_id) if room else None
+        player_name = player["name"] if player else "unknown"
 
         if not room:
+            logger.warning(
+                f"WS MSG FAILED | room={room_id} player={player_name} "
+                f"type={msg_type} reason=room_not_found"
+            )
             await websocket.send_json({"type": "error", "message": "Room not found"})
             return
+
+        # Log messages (except pings which are too frequent)
+        if msg_type != "ping":
+            logger.debug(
+                f"WS MSG | room={room_id} player={player_name} type={msg_type}"
+            )
 
         if msg_type == "ping":
             await websocket.send_json({"type": "pong", "timestamp": time.time()})
@@ -101,22 +150,36 @@ class ConnectionManager:
             await self._send_game_state(room_id, player_id)
 
         elif msg_type == "update_settings":
-            player = room["players"].get(player_id)
             if player and player["is_host"]:
-                await game_manager.update_settings(room_id, data.get("settings", {}))
+                await game_manager.update_settings(
+                    room_id, data.get("settings", {}), player_name
+                )
                 await self._broadcast_room_state(room_id)
+            else:
+                logger.warning(
+                    f"SETTINGS UPDATE DENIED | room={room_id} player={player_name} "
+                    "reason=not_host"
+                )
 
         elif msg_type == "start_game":
-            player = room["players"].get(player_id)
             if player and player["is_host"]:
                 can_start, error = await game_manager.can_start_game(room_id)
                 if can_start:
-                    await game_manager.start_game(room_id)
+                    await game_manager.start_game(room_id, player_name)
                     await self._broadcast_room_state(room_id)
                     await self._send_all_turn_info(room_id)
                     self._start_timer(room_id)
                 else:
+                    logger.warning(
+                        f"GAME START DENIED | room={room_id} host={player_name} "
+                        f"reason={error}"
+                    )
                     await websocket.send_json({"type": "error", "message": error})
+            else:
+                logger.warning(
+                    f"GAME START DENIED | room={room_id} player={player_name} "
+                    "reason=not_host"
+                )
 
         elif msg_type == "submit_turn":
             chain_id = data.get("chain_id", "")
@@ -133,24 +196,41 @@ class ConnectionManager:
                 room = await game_manager.get_room(room_id)
                 if room and room["phase"] == "reveal":
                     self._cancel_timer(room_id)
+                    logger.info(f"REVEAL PHASE | room={room_id}")
             else:
+                logger.warning(
+                    f"TURN SUBMIT FAILED | room={room_id} player={player_name} "
+                    f"reason={message}"
+                )
                 await websocket.send_json({"type": "error", "message": message})
 
         elif msg_type == "advance_reveal":
-            player = room["players"].get(player_id)
             if player and player["is_host"]:
-                has_more = await game_manager.advance_reveal(room_id)
+                has_more = await game_manager.advance_reveal(room_id, player_name)
                 await self._broadcast_room_state(room_id)
                 if not has_more:
                     await self.broadcast_room({"type": "game_finished"}, room_id)
+            else:
+                logger.warning(
+                    f"REVEAL ADVANCE DENIED | room={room_id} player={player_name} "
+                    "reason=not_host"
+                )
 
         elif msg_type == "restart_game":
-            player = room["players"].get(player_id)
             if player and player["is_host"]:
-                await game_manager.restart_game(room_id)
+                await game_manager.restart_game(room_id, player_name)
                 await self._broadcast_room_state(room_id)
+            else:
+                logger.warning(
+                    f"RESTART DENIED | room={room_id} player={player_name} "
+                    "reason=not_host"
+                )
 
         elif msg_type == "leave":
+            logger.info(
+                f"PLAYER LEAVING | room={room_id} player={player_name} "
+                f"id={player_id[:8]}..."
+            )
             still_exists = await game_manager.leave_room(room_id, player_id)
             self.disconnect(room_id, player_id)
             if still_exists:
@@ -252,12 +332,14 @@ class ConnectionManager:
         """Start the turn timer for a room."""
         self._cancel_timer(room_id)
         self.timing_tasks[room_id] = asyncio.create_task(self._timer_loop(room_id))
+        logger.debug(f"TIMER STARTED | room={room_id}")
 
     def _cancel_timer(self, room_id: str):
         """Cancel the timer for a room."""
         if room_id in self.timing_tasks:
             self.timing_tasks[room_id].cancel()
             del self.timing_tasks[room_id]
+            logger.debug(f"TIMER CANCELLED | room={room_id}")
 
     async def _timer_loop(self, room_id: str):
         """Timer loop that checks for timeouts."""
@@ -308,6 +390,8 @@ class ConnectionManager:
 
         except asyncio.CancelledError:
             pass
+        except Exception:
+            logger.exception(f"TIMER ERROR | room={room_id}")
 
     async def _send_timer_sync(self, room_id: str, elapsed: float):
         """Send lightweight timer sync to all players."""
@@ -331,9 +415,11 @@ connection_manager = ConnectionManager()
 
 async def websocket_endpoint(websocket: WebSocket, room_id: str, player_id: str):
     """Main WebSocket endpoint handler."""
-    await connection_manager.connect(websocket, room_id, player_id)
+    ip = get_ws_client_ip(websocket)
 
     try:
+        await connection_manager.connect(websocket, room_id, player_id)
+
         # Send initial state
         await connection_manager._send_game_state(room_id, player_id)
 
@@ -354,11 +440,30 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, player_id: str)
             data = await websocket.receive_json()
             await connection_manager.handle_message(websocket, room_id, player_id, data)
 
-    except Exception:
-        pass
+    except Exception as e:
+        # Only log if it's not a normal disconnect
+        error_type = type(e).__name__
+        if error_type not in ("WebSocketDisconnect", "ConnectionClosedError"):
+            logger.debug(
+                f"WS EXCEPTION | room={room_id} player_id={player_id[:8]}... "
+                f"error={error_type} ip={ip}"
+            )
     finally:
+        # Get player name before disconnect
+        player_name = "unknown"
+        room = await game_manager.get_room(room_id)
+        if room:
+            player = room.get("players", {}).get(player_id)
+            if player:
+                player_name = player["name"]
+
         connection_manager.disconnect(room_id, player_id)
         await connection_manager.mark_player_disconnected(room_id, player_id)
+
+        logger.info(
+            f"WS DISCONNECTED | room={room_id} player={player_name} "
+            f"id={player_id[:8]}... ip={ip}"
+        )
 
         # Broadcast that player disconnected
         room = await game_manager.get_room(room_id)
