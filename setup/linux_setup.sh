@@ -23,13 +23,24 @@ echo "Starting Python project setup for Linux/macOS"
 # Set the desired Python version for the virtual environment.
 PYTHON_VERSION="3.11"
 # Set the name of your package. This will be used for the directory inside 'src'.
-PACKAGE_NAME="new_project"
+PACKAGE_NAME="telemess"
 
 
 # Install Core Tools
 echo "Ensuring uv and ruff are installed..."
-curl -LsSf https://astral.sh/uv/install.sh | sh
-curl -LsSf https://astral.sh/ruff/install.sh | sh
+if command -v uv &> /dev/null; then
+    echo "uv is already installed."
+else
+    echo "Installing uv..."
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+fi
+
+if command -v ruff &> /dev/null; then
+    echo "ruff is already installed."
+else
+    echo "Installing ruff..."
+    curl -LsSf https://astral.sh/ruff/install.sh | sh
+fi
 
 # Update PATH for the Current Session to ensure uv and ruff are found
 export PATH="$HOME/.local/bin:$PATH"
@@ -66,8 +77,12 @@ authors = [{ name = "Your Name", email = "your@email.com" }]
 dependencies = [
     "pre-commit>=3.0.0",
 ]
+
 requires-python = ">=$PYTHON_VERSION"
 readme = "README.md"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/$PACKAGE_NAME"]
 
 EOF
 else
@@ -129,7 +144,7 @@ uv sync > /dev/null
 
 # Ensure we are in a Git repository before installing hooks
 if ! git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
-    echo "Not a Git repository. Initializing Git..."
+    echo "Not a Git repository. Initializing Git."
     git init
     git add .
     git commit -m "Initial commit from setup script" || echo "Initial commit skipped (possibly nothing to commit)."
@@ -142,7 +157,13 @@ uv run pre-commit install --hook-type pre-push
 
 # Final Instructions
 echo ""
-echo "Setup complete. Your environment is ready."
+echo -e "\033[1;32mSetup complete. Your environment is ready.\033[0m"
 echo "To activate the virtual environment, run the following command in your terminal:"
 echo "source .venv/bin/activate"
 echo "Once activated, you can add packages with 'uv add <package_name>'"
+echo ""
+echo "To run Telemess:"
+echo "uv run uvicorn telemess.main:app --app-dir src --host 0.0.0.0 --port 8000"
+echo ""
+echo "For development with auto-reload:"
+echo "uv run uvicorn telemess.main:app --app-dir src --host 0.0.0.0 --port 8000 --reload"

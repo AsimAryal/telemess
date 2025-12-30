@@ -1,153 +1,199 @@
-# Python Project Template
+# 🎨 Telemess
 
-This template provides a standardized Python project setup to ensure consistency across development environments, code quality, and version control practices.
+**The drawing game where things go hilariously wrong.**
 
------
+Players alternate between drawing a prompt and describing what they see. You may start with "cooking pancakes" and end with "alien disco party". The reveal at the end showing the progression is comedy gold!
 
-## First-Time Setup
+![Telemess Preview](https://via.placeholder.com/600x300/FEF7E3/2D3047?text=Telemess+%F0%9F%8E%A8)
 
-After cloning this repository, run the appropriate setup script for your operating system.<br>
-These scripts are intended to be run only once.<br>
-<b>Set python version you want in the setup script<b> default is 3.11<br>
-<b>Set the project name in the setup script<b>
+## ✨ Features
 
-### Linux/macOS
+- 🎮 **Real-time multiplayer** - Up to 16 players per game
+- 📱 **Mobile-first design** - Optimized for phones and tablets
+- 🌙 **Dark/Light mode** - Comfortable playing any time
+- 🎨 **Touch-friendly canvas** - Draw with your finger on mobile
+- ⏱️ **Customizable timers** - Set your own pace
+- 👑 **Host migration** - Game continues if the host leaves
+- 🔄 **Player persistence** - Rejoin if you accidentally close the app
+- 🎭 **Parallel chains** - Multiple games run simultaneously to keep everyone engaged
+- 🎉 **Epic reveal** - Watch the hilarious transformation unfold
 
-bash <br><br>
-`chmod +x setup/linux_setup.sh` <br>
-`./setup/linux_setup.sh`
+## 🚀 Quick Start
 
+### Prerequisites
 
-### Windows (PowerShell)
+- Python 3.11+
+- [uv](https://github.com/astral-sh/uv) package manager
 
-powershell<br>
-Run this first:<br>
-`Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser`
+### Setup
 
-<b>If you run into an error, run the following command outside vscode in powershell(run as administrator):<b><br>
+#### Windows (PowerShell)
 
-`Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope LocalMachine`
+```powershell
+# One-time setup (allow local scripts)
+Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope CurrentUser
 
-Then run this to setup your environment:<br>
-`.\setup\setup_windows.ps1`
+# If you get "script is not digitally signed" error:
+Unblock-File -Path .\setup\windows_setup.ps1
 
-
------
-
-## What Gets Installed
-
-The setup process configures your environment with the following tools and files:
-
-| Tool | Purpose |
-| :--- | :--- |
-| **uv** | A modern Python package manager and virtual environment tool. |
-| **ruff** | A fast Python linter and formatter that enforces code style. |
-| **pre-commit** | A framework for managing Git hooks to run automated checks. |
-| **pyproject.toml** | Central configuration for dependencies and tool settings. |
-| **uv.lock** | Lockfile to ensure consistent dependency resolution. |
-| **.venv/** | A local virtual environment for isolated package installation. |
-| **.pre-commit-config.yaml** | Configuration for standard pre-commit hooks. |
-
------
-
-## What the Setup Scripts Do
-
-  * **Install Tools**: Installs `uv`, `ruff`, and `pre-commit` if they are not already installed.
-  * **Create Virtual Environment**: Creates a virtual environment in `.venv/` using `uv venv`.
-  * **Initialize Project**: Runs `uv init -y` if `pyproject.toml` does not already exist.
-  * **Track Dependencies**: Installs `pre-commit` via `uv add` so it is tracked in `pyproject.toml` and `uv.lock`.
-  * **Configure Git Hooks**: Creates `.pre-commit-config.yaml` if not present, with hooks for:
-      * `ruff` for linting and formatting
-      * Fixing trailing whitespace and missing end-of-file newlines
-      * Checking for unresolved merge conflicts
-      * Checking for accidentally added large files (limit: 1024 KB)
-      * Secret scanning via `detect-secrets`
-  * **Install Hooks**: Installs Git hooks for both commit and push actions using `pre-commit`.
-  * **Sync Dependencies**: Uses `uv pip sync` to install all dependencies listed in `pyproject.toml` and `uv.lock`.
-
-This ensures that your local environment is in sync with project requirements and that all automated checks are enforced from the beginning.
-
------
-
-## Ongoing Usage
-
-### Installing New Packages
-
-Use `uv add` to add any new dependencies:
-
-```bash
-uv add <package-name>
+# Run setup
+.\setup\windows_setup.ps1
 ```
 
-### Synchronizing Dependencies
-
-If joining an existing project or switching machines, run:
+#### Linux/macOS
 
 ```bash
+chmod +x setup/linux_setup.sh
+./setup/linux_setup.sh
+```
+
+### Running the Game
+
+```bash
+# Using uv with uvicorn (recommended)
+uv run uvicorn telemess.main:app --app-dir src --host 0.0.0.0 --port 8000
+
+# With auto-reload for development
+uv run uvicorn telemess.main:app --app-dir src --host 0.0.0.0 --port 8000 --reload
+
+# Or activate venv first, then run uvicorn directly
+# Windows:
+.\.venv\Scripts\activate
+# Linux/macOS:
+source .venv/bin/activate
+
+# Then run:
+uvicorn telemess.main:app --app-dir src --host 0.0.0.0 --port 8000
+```
+
+The game will start at **http://localhost:8000**
+
+For network play (other devices on your network):
+- Find your local IP (e.g., `192.168.1.100`)
+- Players connect to `http://192.168.1.100:8000`
+
+## 🎯 How to Play
+
+1. **Enter your name** - This is saved for future sessions
+2. **Join or host a game** - Create a room or join an existing one
+3. **Wait for players** - Need at least 3 players to start
+4. **Host starts the game** - Can set custom prompts and timers
+5. **Draw or describe** - Alternate between drawing prompts and describing drawings
+6. **Watch the reveal** - See how "cooking pancakes" became "alien disco party"!
+
+## 🎮 Game Flow
+
+```
+Round 1: Player A sees prompt → draws it
+Round 2: Player B sees drawing → describes it
+Round 3: Player C sees description → draws it
+Round 4: Player D sees drawing → describes it
+... and so on until everyone has had a turn
+```
+
+With 14-16 players, the game runs **2-3 parallel chains** so everyone stays engaged!
+
+## ⚙️ Host Settings
+
+| Setting | Range | Default | Description |
+|---------|-------|---------|-------------|
+| Drawing Time | 30-120s | 60s | Time to complete a drawing |
+| Description Time | 15-60s | 30s | Time to write a description |
+| Custom Prompt | 0-50 chars | Random | Starting prompt for chain 1 |
+
+## 🖥️ Deployment on Raspberry Pi
+
+This game is optimized for Raspberry Pi 4:
+
+```bash
+# Clone the repo
+git clone <your-repo-url> telemess
+cd telemess
+
+# Run setup
+chmod +x setup/linux_setup.sh
+./setup/linux_setup.sh
+
+# Run the game
+uv run uvicorn telemess.main:app --app-dir src --host 0.0.0.0 --port 8000
+```
+
+For automatic startup, add to `/etc/rc.local`:
+
+```bash
+cd /home/pi/telemess && /home/pi/.local/bin/uv run uvicorn telemess.main:app --app-dir src --host 0.0.0.0 --port 8000 &
+```
+
+## 🌐 Network Configuration
+
+For LAN play:
+1. Ensure all devices are on the same network
+2. Find the host's local IP: `hostname -I` (Linux) or `ipconfig` (Windows)
+3. Share the URL: `http://<host-ip>:8000`
+
+## 📁 Project Structure
+
+```
+telemess/
+├── src/telemess/
+│   ├── __init__.py
+│   ├── main.py           # FastAPI app entry point
+│   ├── models.py         # Data models
+│   ├── game_manager.py   # Game state logic
+│   ├── websocket_handler.py  # Real-time communication
+│   ├── prompts.py        # Fun random prompts
+│   └── static/
+│       ├── index.html    # Main game page
+│       ├── styles.css    # Mobile-first styles
+│       └── app.js        # Client-side game logic
+├── setup/
+│   ├── windows_setup.ps1
+│   └── linux_setup.sh
+├── pyproject.toml
+└── README.md
+```
+
+## 🔧 Development
+
+```bash
+# Install dependencies
 uv sync
+
+# Run in development mode (with auto-reload)
+uv run uvicorn telemess.main:app --app-dir src --host 0.0.0.0 --port 8000 --reload
+
+# Run linting
+uv run ruff check .
+
+# Run pre-commit hooks
+uv run pre-commit run --all-files
 ```
 
-It automatically looks for a pyproject.toml and a corresponding uv.lock file in your current directory.<br>
-It intelligently checks if your uv.lock is out of date with pyproject.toml.<br>
-If it is, it first resolves the dependencies and updates uv.lock.<br>
-Then, it installs the exact versions from the uv.lock file<br>
+## 🎨 Design Decisions
 
-### Running Lint Checks Manually
+### Big Reveal vs Progressive Viewing
+We chose the **big reveal at the end** because:
+- The comedy builds exponentially when you see the full transformation
+- Progressive viewing would spoil the "how did we get here?!" moment
+- The reveal ceremony becomes a shared social experience
 
-Execute all configured checks on all files:
+### Canvas in Dark Mode
+Following industry standards (Figma, Excalidraw, Miro):
+- The **canvas always stays white** regardless of theme
+- This ensures proper contrast for drawings
+- The UI around the canvas changes with the theme
 
-```bash
-pre-commit run --all-files
-```
+### Keeping Players Engaged
+With 14-16 players, we run **multiple parallel chains**:
+- 2-3 chains running simultaneously
+- More players active at any given time
+- Waiting players see progress bars for all chains
+- More content for the final reveal!
 
-### Updating Pre-commit Hooks
+## 📝 License
 
-Periodically update the hooks to their latest versions:
+MIT License - feel free to use and modify!
 
-```bash
-pre-commit autoupdate
-```
+---
 
------
-
-## Standard README Structure for Your Project
-
-Once the setup is complete, this README should be replaced with project-specific content.<br>
-The following structure is recommended:
-
-````markdown
-# Project Name
-
-## Overview
-
-A brief description of the project and its purpose.
-
-## Setup
-
-### Linux/macOS
-
-bash
-`chmod +x setup.sh` <br>
-`./setup/setup.sh`
-
-### Windows (PowerShell)
-
-powershell<br>
-Run this first:<br>
-`Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser`
-
-Then run this to setup your environment:<br>
-`.\setup\setup_windows.ps1`
-
-
-
-## Usage
-
-Instructions on how to run the application, services, or scripts.
-
-## Linting and Code Quality
-
-To check code formatting and perform other pre-commit checks:
-
-bash<br>
-`pre-commit run --all-files`
+Made with ❤️ for game nights that need more chaos.

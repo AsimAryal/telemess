@@ -23,7 +23,7 @@ Write-Host "Starting Python project setup for Windows"
 # Set the desired Python version for the virtual environment.
 $pythonVersion = "3.11"
 # Set the name of your package. This will be used for the directory inside 'src'.
-$packageName = "new_project"
+$packageName = "telemess"
 
 
 # Install Core Tools
@@ -61,7 +61,8 @@ if (-not (Test-Path "pyproject.toml" -PathType Leaf)) {
     New-Item -ItemType File -Path "src\$packageName\__init__.py" | Out-Null
 
     # Create a pyproject.toml: uses `uv build`
-@"
+    # Note: Using .NET WriteAllText to avoid UTF-8 BOM that PowerShell 5.1 adds with Out-File
+    $pyprojectContent = @"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
@@ -77,8 +78,8 @@ dependencies = [
 requires-python = ">=$pythonVersion"
 readme = "README.md"
 
-
-"@ | Out-File -Encoding UTF8 "pyproject.toml"
+"@
+    [IO.File]::WriteAllText("$PWD\pyproject.toml", $pyprojectContent)
 } else {
     Write-Host "Existing pyproject.toml found."
 }
@@ -110,7 +111,8 @@ if (-not ($pyprojectContent -match '\[tool\.ruff\]')) {
 # Create Pre-commit Configuration if it doesn't exist
 if (-not (Test-Path ".pre-commit-config.yaml" -PathType Leaf)) {
     Write-Host "Creating .pre-commit-config.yaml"
-@"
+    # Note: Using .NET WriteAllText to avoid UTF-8 BOM that PowerShell 5.1 adds with Out-File
+    $precommitContent = @"
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.4.4
@@ -130,7 +132,8 @@ repos:
     rev: v1.5.0
     hooks:
       - id: detect-secrets
-"@ | Out-File -Encoding UTF8 ".pre-commit-config.yaml"
+"@
+    [IO.File]::WriteAllText("$PWD\.pre-commit-config.yaml", $precommitContent)
 }
 
 # Sync Environment: This is the key step for new and existing projects.

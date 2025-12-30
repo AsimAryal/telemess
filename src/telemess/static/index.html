@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#FEF7E3">
+    <title>Telemess - The Drawing Game</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎨</text></svg>">
+</head>
+<body>
+    <div id="rush-overlay" class="rush-overlay"></div>
+    <div id="toast-container" class="toast-container"></div>
+
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <span class="logo-icon">🎨</span>Telemess
+            </div>
+            <button id="theme-toggle" class="theme-toggle" aria-label="Toggle theme">
+                <span class="icon-sun">☀️</span>
+                <span class="icon-moon">🌙</span>
+            </button>
+        </header>
+
+        <!-- Name Entry Screen -->
+        <section id="screen-name" class="screen active">
+            <div class="card" style="margin-top: auto; margin-bottom: auto;">
+                <div class="card-header text-center">
+                    <h1 class="card-title">Welcome!</h1>
+                    <p class="card-subtitle">What should we call you?</p>
+                </div>
+                <div class="input-group">
+                    <input type="text" id="input-name" class="input" placeholder="Enter your name..." maxlength="20" autocomplete="off">
+                </div>
+                <button id="btn-save-name" class="btn btn-primary btn-block btn-lg">Let's Play!</button>
+            </div>
+        </section>
+
+        <!-- Lobby Browser Screen -->
+        <section id="screen-lobby-browser" class="screen">
+            <div class="tabs">
+                <button id="tab-join" class="tab active">Join Game</button>
+                <button id="tab-host" class="tab">Host Game</button>
+            </div>
+
+            <!-- Join Tab Content -->
+            <div id="tab-content-join" class="tab-content">
+                <div class="card mb-2">
+                    <div class="card-header">
+                        <h2 class="card-title">Available Games</h2>
+                        <p class="card-subtitle">Tap a room to join</p>
+                    </div>
+                    <div id="room-list" class="room-list">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">—</div>
+                            <p>No games available</p>
+                            <p class="text-muted">Be the first to host one!</p>
+                        </div>
+                    </div>
+                    <button id="btn-refresh-rooms" class="btn btn-outline btn-block mt-2">
+                        Refresh
+                    </button>
+                </div>
+
+                <!-- Quick Join -->
+                <div class="card">
+                    <div class="input-group">
+                        <label class="input-label">Have a room code?</label>
+                        <input type="text" id="input-room-code" class="input" placeholder="Enter code..." maxlength="8" style="text-transform: uppercase;">
+                    </div>
+                    <button id="btn-quick-join" class="btn btn-secondary btn-block">Join Room</button>
+                </div>
+            </div>
+
+            <!-- Host Tab Content -->
+            <div id="tab-content-host" class="tab-content hidden">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Host a Game</h2>
+                        <p class="card-subtitle">Create a new room for your friends</p>
+                    </div>
+                    <div class="input-group">
+                        <label class="input-label">Room Name (optional)</label>
+                        <input type="text" id="input-room-name" class="input" placeholder="e.g., Friday Night Fun" maxlength="30">
+                    </div>
+                    <button id="btn-create-room" class="btn btn-primary btn-block btn-lg">Create Room</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Waiting Room / Lobby Screen -->
+        <section id="screen-lobby" class="screen">
+            <div class="card mb-2">
+                <div class="flex justify-between items-center mb-2">
+                    <div>
+                        <h2 id="lobby-room-name" class="card-title">Game Room</h2>
+                        <p class="card-subtitle">Room Code: <strong id="lobby-room-code">XXXX</strong></p>
+                    </div>
+                    <button id="btn-leave-lobby" class="btn btn-outline btn-sm">Leave</button>
+                </div>
+
+                <h3 class="mb-1">Players (<span id="player-count">0</span>/16)</h3>
+                <div id="lobby-player-list" class="player-list">
+                    <!-- Player chips will be added here -->
+                </div>
+
+                <!-- Host Settings -->
+                <div id="host-settings" class="settings-panel hidden">
+                    <h3 class="settings-title">Game Settings</h3>
+
+                    <div class="setting-row">
+                        <span class="setting-label">Drawing Time</span>
+                        <div class="range-container">
+                            <input type="range" id="setting-draw-time" class="range" min="30" max="120" value="60" step="10">
+                            <span id="draw-time-value" class="range-value">60s</span>
+                        </div>
+                    </div>
+
+                    <div class="setting-row">
+                        <span class="setting-label">Description Time</span>
+                        <div class="range-container">
+                            <input type="range" id="setting-describe-time" class="range" min="15" max="60" value="30" step="5">
+                            <span id="describe-time-value" class="range-value">30s</span>
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <label class="input-label">Custom Starting Prompt (optional)</label>
+                        <input type="text" id="setting-custom-prompt" class="input" placeholder="Leave empty for random" maxlength="50">
+                        <small class="text-muted">Max 50 characters for maximum hilarity</small>
+                    </div>
+                </div>
+            </div>
+
+            <button id="btn-start-game" class="btn btn-primary btn-block btn-lg hidden">
+                Start Game!
+            </button>
+            <div id="waiting-for-host" class="text-center text-muted mt-2">
+                <div class="loader"></div>
+                <p class="mt-2">Waiting for host to start...</p>
+            </div>
+        </section>
+
+        <!-- Drawing Screen -->
+        <section id="screen-draw" class="screen">
+            <div class="timer-container">
+                <div id="draw-timer" class="timer">60</div>
+                <div class="timer-label">seconds left to draw</div>
+            </div>
+
+            <div class="prompt-display mb-2">
+                <div class="prompt-label">Draw this:</div>
+                <div id="draw-prompt" class="prompt-text">Loading...</div>
+            </div>
+
+            <div class="canvas-container">
+                <canvas id="drawing-canvas" class="drawing-canvas"></canvas>
+                <div class="canvas-toolbar">
+                    <div class="color-picker" id="color-picker">
+                        <button class="color-btn active" data-color="#2D3047" style="background: #2D3047;"></button>
+                        <button class="color-btn" data-color="#FF6B6B" style="background: #FF6B6B;"></button>
+                        <button class="color-btn" data-color="#4ECDC4" style="background: #4ECDC4;"></button>
+                        <button class="color-btn" data-color="#FFE66D" style="background: #FFE66D;"></button>
+                        <button class="color-btn" data-color="#A06CD5" style="background: #A06CD5;"></button>
+                        <button class="color-btn" data-color="#4A90D9" style="background: #4A90D9;"></button>
+                    </div>
+                    <div class="brush-sizes" id="brush-sizes">
+                        <button class="brush-btn" data-size="4"><span class="dot" style="width: 4px; height: 4px;"></span></button>
+                        <button class="brush-btn active" data-size="8"><span class="dot" style="width: 8px; height: 8px;"></span></button>
+                        <button class="brush-btn" data-size="16"><span class="dot" style="width: 14px; height: 14px;"></span></button>
+                    </div>
+                    <div class="flex gap-1">
+                        <button id="btn-eraser" class="tool-btn eraser" title="Eraser">E</button>
+                        <button id="btn-clear" class="tool-btn" title="Clear canvas">C</button>
+                        <button id="btn-undo" class="tool-btn" title="Undo">↩</button>
+                    </div>
+                </div>
+            </div>
+
+            <button id="btn-submit-drawing" class="btn btn-primary btn-block btn-lg mt-2">
+                Done
+            </button>
+        </section>
+
+        <!-- Describe Screen -->
+        <section id="screen-describe" class="screen">
+            <div class="timer-container">
+                <div id="describe-timer" class="timer">30</div>
+                <div class="timer-label">seconds left to describe</div>
+            </div>
+
+            <div class="describe-container">
+                <div class="image-preview">
+                    <img id="describe-image" src="" alt="Drawing to describe">
+                </div>
+
+                <div class="input-group">
+                    <label class="input-label">What do you see?</label>
+                    <input type="text" id="input-description" class="input" placeholder="Describe the drawing..." maxlength="50" autocomplete="off">
+                    <div id="char-counter" class="char-counter">0/50</div>
+                </div>
+
+                <button id="btn-submit-description" class="btn btn-primary btn-block btn-lg">
+                    Submit
+                </button>
+            </div>
+        </section>
+
+        <!-- Waiting Screen -->
+        <section id="screen-waiting" class="screen">
+            <div class="waiting-container" style="margin: auto;">
+                <div class="waiting-animation">⏳</div>
+                <h2 class="waiting-title">Hang tight!</h2>
+                <p class="waiting-subtitle">Waiting for other players...</p>
+
+                <div id="chains-progress" class="chains-progress">
+                    <!-- Chain progress bars will be added here -->
+                </div>
+            </div>
+        </section>
+
+        <!-- Reveal Screen -->
+        <section id="screen-reveal" class="screen">
+            <div class="reveal-container">
+                <h2 class="reveal-title">The Big Reveal!</h2>
+                <p class="text-muted mb-2">Chain <span id="reveal-chain-num">1</span> of <span id="reveal-total-chains">1</span></p>
+
+                <div id="reveal-chain" class="reveal-chain">
+                    <!-- Turns will be revealed here -->
+                </div>
+
+                <div id="reveal-dots" class="reveal-dots">
+                    <!-- Dots for chain navigation -->
+                </div>
+
+                <div class="reveal-navigation">
+                    <button id="btn-reveal-next" class="btn btn-primary btn-block btn-lg">
+                        Next Chain →
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Game Finished Screen -->
+        <section id="screen-finished" class="screen">
+            <div class="card" style="margin: auto; text-align: center;">
+                <div style="font-size: 4rem; margin-bottom: 1rem;">🏆</div>
+                <h2 class="card-title">That was hilarious!</h2>
+                <p class="card-subtitle mb-3">Ready for another round?</p>
+
+                <button id="btn-play-again" class="btn btn-primary btn-block btn-lg mb-2">
+                    Play Again
+                </button>
+                <button id="btn-back-to-lobby" class="btn btn-outline btn-block">
+                    Back to Lobby
+                </button>
+            </div>
+        </section>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
