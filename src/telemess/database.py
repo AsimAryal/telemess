@@ -566,10 +566,19 @@ def _row_to_turn(row: aiosqlite.Row) -> dict[str, Any]:
 
 
 async def cleanup_stale_data(
-    disconnect_timeout: int = 300, room_timeout: int = 600
+    disconnect_timeout: int = 300,
+    room_timeout: int = 600,
+    ghost_timeout: int = 1800,
 ) -> tuple[int, int]:
     """
     Clean up stale players and empty rooms.
+
+    Args:
+        disconnect_timeout: Seconds before removing explicitly disconnected players (5 min)
+        room_timeout: Seconds before removing empty rooms (10 min)
+        ghost_timeout: Seconds before removing "connected" players who haven't been
+                       seen (30 min) - handles browser crashes, etc.
+
     Returns (players_removed, rooms_removed).
     """
     now = time.time()
@@ -588,6 +597,17 @@ async def cleanup_stale_data(
             (now, disconnect_timeout),
         )
         players_removed = cursor.rowcount
+
+        # Remove "ghost" players - marked connected but haven't been seen in a long time
+        # This handles browser crashes, network issues, etc.
+        cursor = await db.execute(
+            """
+            DELETE FROM players
+            WHERE is_connected = 1 AND (? - last_seen) > ?
+            """,
+            (now, ghost_timeout),
+        )
+        players_removed += cursor.rowcount
 
         # Find and delete empty rooms past timeout
         cursor = await db.execute(

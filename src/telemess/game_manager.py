@@ -20,6 +20,9 @@ class GameManager:
     DISCONNECT_TIMEOUT = 300
     # How long to keep empty rooms (10 minutes)
     ROOM_CLEANUP_TIMEOUT = 600
+    # How long to keep "connected" players who haven't been seen (30 minutes)
+    # Handles browser crashes, network drops, etc.
+    GHOST_TIMEOUT = 1800
     # Minimum players to start
     MIN_PLAYERS = 3
 
@@ -48,7 +51,9 @@ class GameManager:
             await asyncio.sleep(30)  # Check every 30 seconds
             try:
                 players_removed, rooms_removed = await db.cleanup_stale_data(
-                    self.DISCONNECT_TIMEOUT, self.ROOM_CLEANUP_TIMEOUT
+                    self.DISCONNECT_TIMEOUT,
+                    self.ROOM_CLEANUP_TIMEOUT,
+                    self.GHOST_TIMEOUT,
                 )
                 if players_removed or rooms_removed:
                     logger.info(
