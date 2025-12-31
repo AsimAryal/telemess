@@ -492,7 +492,7 @@ class GameManager:
             turn_type=turn_type,
             player_id=player_id,
             player_name=player["name"],
-            content=content if turn_type == "description" else "(drawing)",
+            content=content,
             position=turn_count,
         )
 
