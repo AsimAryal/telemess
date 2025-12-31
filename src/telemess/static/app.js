@@ -617,9 +617,9 @@ function initCanvas() {
 
     state.ctx.scale(dpr, dpr);
 
-    // Clear canvas with white background
+    // Clear canvas with white background (use CSS pixel dimensions after scaling)
     state.ctx.fillStyle = '#FFFFFF';
-    state.ctx.fillRect(0, 0, state.canvas.width, state.canvas.height);
+    state.ctx.fillRect(0, 0, state.canvas.width / dpr, state.canvas.height / dpr);
 
     // Reset drawing state
     state.drawingHistory = [];
@@ -768,7 +768,7 @@ function setupDescribeScreen() {
     const turn = state.currentTurn;
     if (!turn) return;
 
-    document.getElementById('describe-image').src = turn.previous_content;
+    document.getElementById('describe-image').src = turn.previous_content || '';
     document.getElementById('input-description').value = '';
     document.getElementById('char-counter').textContent = '0/50';
     document.getElementById('char-counter').classList.remove('limit');
